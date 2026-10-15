@@ -188,18 +188,61 @@ def berechne_zeitpunkt_fuer_zielwert(res, ziel_typ, ziel_betrag):
 
 
 # ------------------------------------------------------------------------------
-# 2. Browser-Benutzeroberfläche
+# 2. Browser-Benutzeroberfläche (Responsiv für PC & Smartphone)
 # ------------------------------------------------------------------------------
 st.set_page_config(page_title="Annuitätendarlehensrechner", layout="wide")
 
-# CSS: Verhindert das Abschneiden (...) der Zahlen in allen Ergebnis-Kacheln
+# CSS für vollständige Zahlenanzeige sowie perfektes Layout auf PC UND Handy
 st.markdown("""
 <style>
+/* 1. Verhindert das Abschneiden (...) der Zahlen in allen Ergebnis-Kacheln */
 div[data-testid="stMetricValue"] > div {
     white-space: nowrap !important;
     overflow: visible !important;
     text-overflow: unset !important;
-    font-size: clamp(1.3rem, 2.0vw, 2.1rem) !important;
+    font-size: clamp(1.25rem, 2.0vw, 2.0rem) !important;
+}
+
+/* 2. Zentrierte Überschriften & Trennlinien in der Detail-Box */
+.detail-header {
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    line-height: 1.3;
+}
+.detail-divider {
+    border: 0;
+    border-top: 1px solid rgba(150, 150, 150, 0.35);
+    margin: 0.4rem 0 0.9rem 0;
+}
+
+/* 3. PC-Ansicht (ab 768px): Alle 3 Linien & Info-Boxen exakt auf einer Höhe */
+@media (min-width: 768px) {
+    .detail-header {
+        min-height: 3.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .detail-spacer {
+        min-height: 1.5rem;
+    }
+}
+
+/* 4. Handy-Ansicht (unter 768px): Saubere Abstände zwischen den gestapelten Blöcken */
+@media (max-width: 767px) {
+    .detail-header {
+        margin-top: 0.8rem;
+        min-height: auto;
+    }
+    .detail-spacer {
+        display: none;
+    }
+    /* Verhindert, dass das Diagramm-Schwebefenster auf dem Handy hängen bleibt */
+    #vg-tooltip-element {
+        pointer-events: none !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -256,51 +299,38 @@ try:
         st.session_state["letzte_signatur"] = aktuelle_signatur
         st.toast(f"Tilgungsplan aktualisiert! Monatsrate: {res['r']:,.2f} €", icon="✨")
 
-    # 1. Haupt-Kennzahlen (volle Zahlenanzeige ohne Abschneiden)
+    # 1. Haupt-Kennzahlen
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Monatliche Rate (r)", f"{res['r']:,.2f} €")
     col2.metric("Gesamtlaufzeit", f"{res['laufzeit_jahre']:.2f} Jahre", f"{res['N_monate']:.2f} Monate")
     col3.metric("Gesamtzinsen", f"{res['gesamtzinsen']:,.2f} €")
     col4.metric("Gesamtaufwand", f"{res['gesamtkosten']:,.2f} €")
 
-    # 2. Aufklappbare Detail-Übersicht (Überschriften zentriert, Linien & Boxen auf einer Höhe)
-    with st.expander("📊 Details: Bank-Nominalwerte (mit ^) vs. Tatsächliche Effektivwerte & Schlussrate", expanded=True):
-        # Reihe A: Zentrierte Überschriften
-        h_col1, h_col2, h_col3 = st.columns(3)
-        with h_col1:
-            st.markdown("<h3 style='text-align: center; margin-bottom: 0;'>Zinssatz p.a.</h3>", unsafe_allow_html=True)
-        with h_col2:
-            st.markdown("<h3 style='text-align: center; margin-bottom: 0;'>Anfangstilgung & Jahresraten</h3>", unsafe_allow_html=True)
-        with h_col3:
-            st.markdown("<h3 style='text-align: center; margin-bottom: 0;'>Ratenstruktur & Schlussrate</h3>", unsafe_allow_html=True)
+    # 2. Aufklappbare Detail-Übersicht (Auf PC synchronisiert, auf Handy logisch gruppiert)
+    with st.expander("📊 Details: Nominalwerte (^) vs. Effektivwerte & Schlussrate", expanded=True):
+        e_col1, e_col2, e_col3 = st.columns(3)
 
-        # Reihe B: Trennlinien & Aufzählungspunkte (starten exakt auf derselben Höhe)
-        c_col1, c_col2, c_col3 = st.columns(3)
-        with c_col1:
-            st.markdown("---")
+        with e_col1:
+            st.markdown("<div class='detail-header'>Zinssatz p.a.</div><hr class='detail-divider'>", unsafe_allow_html=True)
             st.markdown(f"- **Nominalzins Bank ($\\hat{{i}}$):** {res['i_nom']*100:.3f} %")
             st.markdown(f"- **Effektivzins ($i_{{\\text{{eff}}}}$):** {res['i_eff']*100:.3f} %")
+            st.markdown("<div class='detail-spacer'></div>", unsafe_allow_html=True)
+            st.info(f"**Monatszins ($i_M$):** {res['i_M']*100:.4f} %")
 
-        with c_col2:
-            st.markdown("---")
+        with e_col2:
+            st.markdown("<div class='detail-header'>Anfangstilgung & Jahresraten</div><hr class='detail-divider'>", unsafe_allow_html=True)
             st.markdown(f"- **Nominale Tilgung ($\\hat{{t}}$):** {res['t_1']*100:.3f} % ({res['S_0']*res['t_1']:,.2f} €)")
             st.markdown(f"- **Tatsächliche Tilgung Jahr 1 ($t$):** {res['t_eff']*100:.3f} % ({res['S_0']*res['t_eff']:,.2f} €)")
+            st.info(f"**Summe 12 Raten ($\\hat{{R}}$):** {res['R_nom']:,.2f} €  \n**Äquivalenzrate ($R$):** {res['R_eff']:,.2f} €")
 
-        with c_col3:
-            st.markdown("---")
+        with e_col3:
+            st.markdown("<div class='detail-header'>Ratenstruktur & Schlussrate</div><hr class='detail-divider'>", unsafe_allow_html=True)
             st.markdown(f"- **Volle Monatsraten:** {res['volle_raten']} Raten à {res['r']:,.2f} €")
             if res['schlussrate'] < res['r'] - 0.01:
                 st.markdown(f"- **Letzte Rate (im {res['volle_raten']+1}. Monat):** {res['schlussrate']:,.2f} €")
             else:
                 st.markdown("- **Letzte Rate:** Exakt volle Rate")
-
-        # Reihe C: Blaue Info-Boxen (ebenfalls exakt auf einer Höhe)
-        i_col1, i_col2, i_col3 = st.columns(3)
-        with i_col1:
-            st.info(f"**Monatszins ($i_M$):** {res['i_M']*100:.4f} %")
-        with i_col2:
-            st.info(f"**Summe 12 Raten ($\\hat{{R}}$):** {res['R_nom']:,.2f} €  \n**Äquivalenzrate ($R$):** {res['R_eff']:,.2f} €")
-        with i_col3:
+            st.markdown("<div class='detail-spacer'></div>", unsafe_allow_html=True)
             st.info(f"**Exakte Laufzeit:** {res['N_monate']:.2f} Monate")
 
     st.write("---")
@@ -393,9 +423,9 @@ try:
 
     st.write("---")
 
-    # 5. Grafischer Verlauf
+    # 5. Grafischer Verlauf (Werte auf 2 Nachkommastellen gerundet für saubere Tooltips)
     st.subheader("Verlauf von Restschuld, kumulierter Tilgung und Zinsen")
-    chart_df = res["df_jahre"].set_index("Jahr")[["Restschuld", "Tilgung kumuliert", "Zinsen kumuliert"]]
+    chart_df = res["df_jahre"].set_index("Jahr")[["Restschuld", "Tilgung kumuliert", "Zinsen kumuliert"]].round(2)
     st.line_chart(chart_df)
 
 except Exception as e:
