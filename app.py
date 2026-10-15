@@ -1,6 +1,7 @@
 import streamlit as st
 import math
 import pandas as pd
+import altair as alt
 
 
 # ------------------------------------------------------------------------------
@@ -188,14 +189,23 @@ def berechne_zeitpunkt_fuer_zielwert(res, ziel_typ, ziel_betrag):
 
 
 # ------------------------------------------------------------------------------
-# 2. Browser-Benutzeroberfläche (Responsiv für PC & Smartphone)
+# 2. Browser-Benutzeroberfläche (Optimiert für PC & Smartphone)
 # ------------------------------------------------------------------------------
 st.set_page_config(page_title="Annuitätendarlehensrechner", layout="wide")
 
-# CSS für vollständige Zahlenanzeige sowie perfektes Layout auf PC UND Handy
 st.markdown("""
 <style>
-/* 1. Verhindert das Abschneiden (...) der Zahlen in allen Ergebnis-Kacheln */
+/* 1. Hauptüberschrift: Skaliert dynamisch, damit "Annuitätendarlehen" nicht am Ende umbricht */
+.main-app-title {
+    font-size: clamp(1.35rem, 4.5vw, 2.5rem);
+    font-weight: 700;
+    line-height: 1.25;
+    margin-bottom: 0.4rem;
+    word-break: keep-all;
+    overflow-wrap: normal;
+}
+
+/* 2. Verhindert das Abschneiden (...) der Zahlen in allen Ergebnis-Kacheln */
 div[data-testid="stMetricValue"] > div {
     white-space: nowrap !important;
     overflow: visible !important;
@@ -203,51 +213,97 @@ div[data-testid="stMetricValue"] > div {
     font-size: clamp(1.25rem, 2.0vw, 2.0rem) !important;
 }
 
-/* 2. Zentrierte Überschriften & Trennlinien in der Detail-Box */
-.detail-header {
-    text-align: center;
-    font-size: 1.3rem;
-    font-weight: 600;
-    margin-bottom: 0.4rem;
-    line-height: 1.3;
+/* 3. Übersichtlich gestaltete Detail-Karten mit dezent hinterlegten Einzelfeldern */
+.detail-card {
+    background-color: rgba(128, 128, 128, 0.05);
+    border: 1px solid rgba(128, 128, 128, 0.22);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 14px;
 }
-.detail-divider {
-    border: 0;
-    border-top: 1px solid rgba(150, 150, 150, 0.35);
-    margin: 0.4rem 0 0.9rem 0;
+.detail-card-title {
+    text-align: center;
+    font-size: 1.15rem;
+    font-weight: 600;
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.28);
+}
+.detail-field {
+    background-color: rgba(128, 128, 128, 0.09);
+    border-radius: 8px;
+    padding: 11px 14px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+.field-label {
+    font-size: 0.94rem;
+    opacity: 0.92;
+}
+.field-value {
+    font-size: 0.96rem;
+    font-weight: 600;
+    text-align: right;
+}
+.field-sub {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 400;
+    opacity: 0.8;
+}
+.detail-highlight {
+    background-color: rgba(28, 131, 225, 0.14);
+    border: 1px solid rgba(28, 131, 225, 0.35);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 14px;
+}
+.highlight-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.93rem;
+    line-height: 1.5;
 }
 
-/* 3. PC-Ansicht (ab 768px): Alle 3 Linien & Info-Boxen exakt auf einer Höhe */
+/* 4. PC-Ansicht: Gleiche Höhe der Überschriften und Boxen */
 @media (min-width: 768px) {
-    .detail-header {
-        min-height: 3.4rem;
+    .detail-card-title {
+        min-height: 3.2rem;
         display: flex;
         align-items: center;
         justify-content: center;
     }
-    .detail-spacer {
-        min-height: 1.5rem;
+    .detail-field {
+        min-height: 3.4rem;
+    }
+    .detail-highlight {
+        min-height: 4.1rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
 }
 
-/* 4. Handy-Ansicht (unter 768px): Saubere Abstände zwischen den gestapelten Blöcken */
+/* 5. Handy-Ansicht: Fixiert das Diagramm komplett für müheloses Finger-Scrollen */
 @media (max-width: 767px) {
-    .detail-header {
-        margin-top: 0.8rem;
-        min-height: auto;
-    }
-    .detail-spacer {
-        display: none;
-    }
-    /* Verhindert, dass das Diagramm-Schwebefenster auf dem Handy hängen bleibt */
-    #vg-tooltip-element {
+    div[data-testid="stVegaLiteChart"],
+    div[data-testid="stVegaLiteChart"] canvas,
+    div[data-testid="stVegaLiteChart"] svg {
         pointer-events: none !important;
+        touch-action: pan-y !important;
+    }
+    #vg-tooltip-element {
+        display: none !important;
     }
 }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🏦 Rechner für Annuitätendarlehen")
+st.markdown("<div class='main-app-title'>🏦 Rechner für Annuitätendarlehen</div>", unsafe_allow_html=True)
 st.markdown("Berechnung nach deutscher **Bankenpraxis (monatliche Verrechnung)** inklusive Effektivzins-Analyse.")
 
 # Seitenleiste: Eingaben
@@ -306,32 +362,86 @@ try:
     col3.metric("Gesamtzinsen", f"{res['gesamtzinsen']:,.2f} €")
     col4.metric("Gesamtaufwand", f"{res['gesamtkosten']:,.2f} €")
 
-    # 2. Aufklappbare Detail-Übersicht (Auf PC synchronisiert, auf Handy logisch gruppiert)
+    # 2. Aufklappbare Detail-Übersicht mit dezent hinterlegten Feldern
     with st.expander("📊 Details: Nominalwerte (^) vs. Effektivwerte & Schlussrate", expanded=True):
         e_col1, e_col2, e_col3 = st.columns(3)
 
+        # Spalte 1: Zinssatz p.a.
         with e_col1:
-            st.markdown("<div class='detail-header'>Zinssatz p.a.</div><hr class='detail-divider'>", unsafe_allow_html=True)
-            st.markdown(f"- **Nominalzins Bank ($\\hat{{i}}$):** {res['i_nom']*100:.3f} %")
-            st.markdown(f"- **Effektivzins ($i_{{\\text{{eff}}}}$):** {res['i_eff']*100:.3f} %")
-            st.markdown("<div class='detail-spacer'></div>", unsafe_allow_html=True)
-            st.info(f"**Monatszins ($i_M$):** {res['i_M']*100:.4f} %")
+            st.markdown(f"""
+<div class="detail-card">
+<div class="detail-card-title">Zinssatz p.a.</div>
+<div class="detail-field">
+<span class="field-label">Nominalzins Bank (<i>i&#770;</i>)</span>
+<span class="field-value">{res['i_nom']*100:.3f} %</span>
+</div>
+<div class="detail-field">
+<span class="field-label">Effektivzins (<i>i</i><sub>eff</sub>)</span>
+<span class="field-value">{res['i_eff']*100:.3f} %</span>
+</div>
+<div class="detail-highlight">
+<div class="highlight-row">
+<span>Monatszins (<i>i<sub>M</sub></i>):</span>
+<strong>{res['i_M']*100:.4f} %</strong>
+</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
 
+        # Spalte 2: Anfangstilgung & Jahresraten
         with e_col2:
-            st.markdown("<div class='detail-header'>Anfangstilgung & Jahresraten</div><hr class='detail-divider'>", unsafe_allow_html=True)
-            st.markdown(f"- **Nominale Tilgung ($\\hat{{t}}$):** {res['t_1']*100:.3f} % ({res['S_0']*res['t_1']:,.2f} €)")
-            st.markdown(f"- **Tatsächliche Tilgung Jahr 1 ($t$):** {res['t_eff']*100:.3f} % ({res['S_0']*res['t_eff']:,.2f} €)")
-            st.info(f"**Summe 12 Raten ($\\hat{{R}}$):** {res['R_nom']:,.2f} €  \n**Äquivalenzrate ($R$):** {res['R_eff']:,.2f} €")
+            st.markdown(f"""
+<div class="detail-card">
+<div class="detail-card-title">Anfangstilgung & Jahresraten</div>
+<div class="detail-field">
+<span class="field-label">Nominale Tilgung (<i>t&#770;</i>)</span>
+<span class="field-value">{res['t_1']*100:.3f} %<span class="field-sub">({res['S_0']*res['t_1']:,.2f} €)</span></span>
+</div>
+<div class="detail-field">
+<span class="field-label">Tatsächliche Tilgung J. 1 (<i>t</i>)</span>
+<span class="field-value">{res['t_eff']*100:.3f} %<span class="field-sub">({res['S_0']*res['t_eff']:,.2f} €)</span></span>
+</div>
+<div class="detail-highlight">
+<div class="highlight-row">
+<span>Summe 12 Raten (<i>R&#770;</i>):</span>
+<strong>{res['R_nom']:,.2f} €</strong>
+</div>
+<div class="highlight-row">
+<span>Äquivalenzrate (<i>R</i>):</span>
+<strong>{res['R_eff']:,.2f} €</strong>
+</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
 
+        # Spalte 3: Ratenstruktur & Schlussrate
         with e_col3:
-            st.markdown("<div class='detail-header'>Ratenstruktur & Schlussrate</div><hr class='detail-divider'>", unsafe_allow_html=True)
-            st.markdown(f"- **Volle Monatsraten:** {res['volle_raten']} Raten à {res['r']:,.2f} €")
             if res['schlussrate'] < res['r'] - 0.01:
-                st.markdown(f"- **Letzte Rate (im {res['volle_raten']+1}. Monat):** {res['schlussrate']:,.2f} €")
+                letzte_rate_label = f"Letzte Rate ({res['volle_raten']+1}. Mon.)"
+                letzte_rate_wert = f"{res['schlussrate']:,.2f} €"
             else:
-                st.markdown("- **Letzte Rate:** Exakt volle Rate")
-            st.markdown("<div class='detail-spacer'></div>", unsafe_allow_html=True)
-            st.info(f"**Exakte Laufzeit:** {res['N_monate']:.2f} Monate")
+                letzte_rate_label = "Letzte Rate"
+                letzte_rate_wert = "Exakt volle Rate"
+
+            st.markdown(f"""
+<div class="detail-card">
+<div class="detail-card-title">Ratenstruktur & Schlussrate</div>
+<div class="detail-field">
+<span class="field-label">Volle Monatsraten</span>
+<span class="field-value">{res['volle_raten']} Raten<span class="field-sub">(à {res['r']:,.2f} €)</span></span>
+</div>
+<div class="detail-field">
+<span class="field-label">{letzte_rate_label}</span>
+<span class="field-value">{letzte_rate_wert}</span>
+</div>
+<div class="detail-highlight">
+<div class="highlight-row">
+<span>Exakte Laufzeit:</span>
+<strong>{res['N_monate']:.2f} Monate</strong>
+</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
 
     st.write("---")
 
@@ -423,10 +533,52 @@ try:
 
     st.write("---")
 
-    # 5. Grafischer Verlauf (Werte auf 2 Nachkommastellen gerundet für saubere Tooltips)
+    # 5. Fixierter grafischer Verlauf (Kein ungewolltes Verschieben auf dem Smartphone)
     st.subheader("Verlauf von Restschuld, kumulierter Tilgung und Zinsen")
-    chart_df = res["df_jahre"].set_index("Jahr")[["Restschuld", "Tilgung kumuliert", "Zinsen kumuliert"]].round(2)
-    st.line_chart(chart_df)
+
+    chart_daten = res["df_jahre"][["Jahr", "Restschuld", "Tilgung kumuliert", "Zinsen kumuliert"]].round(2)
+    chart_long = chart_daten.melt("Jahr", var_name="Kennzahl", value_name="Betrag")
+    max_jahr = max(2, int(chart_daten["Jahr"].max()))
+
+    verlauf_chart = (
+        alt.Chart(chart_long)
+        .mark_line(strokeWidth=3)
+        .encode(
+            x=alt.X(
+                "Jahr:Q",
+                title="Laufzeit (Jahre)",
+                scale=alt.Scale(domain=[1, max_jahr], nice=False),
+                axis=alt.Axis(tickMinStep=1)
+            ),
+            y=alt.Y(
+                "Betrag:Q",
+                title="Betrag (€)",
+                scale=alt.Scale(zero=True)
+            ),
+            color=alt.Color(
+                "Kennzahl:N",
+                title=None,
+                sort=["Restschuld", "Tilgung kumuliert", "Zinsen kumuliert"],
+                scale=alt.Scale(
+                    domain=["Restschuld", "Tilgung kumuliert", "Zinsen kumuliert"],
+                    range=["#0068c9", "#83c9ff", "#ff2b2b"]
+                ),
+                legend=alt.Legend(
+                    orient="top",
+                    direction="horizontal",
+                    labelLimit=200
+                )
+            ),
+            tooltip=[
+                alt.Tooltip("Jahr:Q", title="Jahr"),
+                alt.Tooltip("Kennzahl:N", title="Kennzahl"),
+                alt.Tooltip("Betrag:Q", title="Betrag (€)", format=",.2f")
+            ]
+        )
+        .properties(height=340)
+    )
+
+    st.altair_chart(verlauf_chart, use_container_width=True)
 
 except Exception as e:
     st.error(f"Fehler bei der Berechnung: {e}")
